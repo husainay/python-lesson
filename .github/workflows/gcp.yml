@@ -9,8 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: husain-python-lesson
-      REGION: asia-southeast2              # 🔹 change this to your region
-      REPO_NAME: github-action        # 🔹 change this to your Artifact Registry repo name
+      REGION: asia-southeast2
+      REPO_NAME: github-action
 
     steps:
       - name: Checkout
@@ -27,13 +27,12 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ vars.PROJECT_ID }}
-          install_components: 'beta'
 
       # 3. Verify gcloud
       - name: Verify gcloud
         run: gcloud info
 
-      # 4. Configure Docker to use gcloud as a credential helper
+      # 4. Configure Docker for Artifact Registry
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
 
@@ -42,10 +41,18 @@ jobs:
         run: |
           docker build -t $IMAGE_NAME:latest .
 
-      # 6. Tag & Push to Artifact Registry
+      # 6. Tag & Push to Artifact Registry (latest + commit SHA)
       - name: Push to Artifact Registry
         run: |
-          IMAGE_URI=$REGION-docker.pkg.dev/${{ vars.PROJECT_ID }}/$REPO_NAME/$IMAGE_NAME:latest
-          echo "Pushing image to $IMAGE_URI"
-          docker tag $IMAGE_NAME:latest $IMAGE_URI
-          docker push $IMAGE_URI
+          COMMIT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+          IMAGE_URI_BASE=$REGION-docker.pkg.dev/${{ vars.PROJECT_ID }}/$REPO_NAME/$IMAGE_NAME
+          
+          echo "Pushing image as latest and commit SHA: $COMMIT_SHA"
+          
+          # Tag with latest
+          docker tag $IMAGE_NAME:latest $IMAGE_URI_BASE:latest
+          docker push $IMAGE_URI_BASE:latest
+          
+          # Tag with commit SHA
+          docker tag $IMAGE_NAME:latest $IMAGE_URI_BASE:$COMMIT_SHA
+          docker push $IMAGE_URI_BASE:$COMMIT_SHA
