@@ -10,16 +10,23 @@ jobs:
     env:
       IMAGE_NAME: husain-python-lesson
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: google cloud authentication
-      uses: google-github-actions/setup-gcloud@v2
-      with:
-        service_account_key: ${{ secrets.SERVICE_ACCOUNT_KEY }}
-        project_id: ${{ vars.PROJECT_ID }}
-        export_default_credentials: true
+      # 1. Authenticate with Google Cloud
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.SERVICE_ACCOUNT_KEY }}
 
-    - name: Build Docker Image
-      run: docker build -t $IMAGE_NAME:latest .
+      # 2. Install gcloud CLI
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.PROJECT_ID }}
+          install_components: 'beta'
+
+      # 3. Verify gcloud
+      - name: verify gcloud
+        run: gcloud info
 
