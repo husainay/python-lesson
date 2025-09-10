@@ -36,23 +36,36 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
 
-      # 5. Build Docker Image
-      - name: Build Docker Image
-        run: |
-          docker build -t $IMAGE_NAME:latest .
+      # 5. Setup QEMU (so runner can emulate arm64)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: linux/arm64
 
-      # 6. Tag & Push to Artifact Registry (latest + commit SHA)
-      - name: Push to Artifact Registry
+      # 6. Setup buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-flags: --debug
+
+      # 7. Build (ARM64) and push using buildx
+      - name: Build and push ARM64 image (Buildx)
+        env:
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           COMMIT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
           IMAGE_URI_BASE=$REGION-docker.pkg.dev/${{ vars.PROJECT_ID }}/$REPO_NAME/$IMAGE_NAME
-          
-          echo "Pushing image as latest and commit SHA: $COMMIT_SHA"
-          
-          # Tag with latest
-          docker tag $IMAGE_NAME:latest $IMAGE_URI_BASE:latest
-          docker push $IMAGE_URI_BASE:latest
-          
-          # Tag with commit SHA
-          docker tag $IMAGE_NAME:latest $IMAGE_URI_BASE:$COMMIT_SHA
-          docker push $IMAGE_URI_BASE:$COMMIT_SHA
+
+          echo "Building for linux/arm64 and pushing to $IMAGE_URI_BASE (tags: latest, $COMMIT_SHA)"
+
+          # make sure builder exists & is bootstrapped
+          docker buildx create --use --name gcbuilder || true
+          docker buildx inspect --bootstrap
+
+          # Build and push for arm64 (emulated if runner is x86_64)
+          docker buildx build \
+            --platform linux/arm64 \
+            -t $IMAGE_URI_BASE:latest \
+            -t $IMAGE_URI_BASE:$COMMIT_SHA \
+            --push \
+            .
