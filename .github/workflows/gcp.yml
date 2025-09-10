@@ -1,14 +1,17 @@
----
 name: Build and Push Python Image to Google Cloud Platform
 on:
   push:
     branches: [ main ]
+
 jobs:
   build-push-gcr:
     name: Build and Push to GCP
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: husain-python-lesson
+      REGION: asia-southeast2              # 🔹 change this to your region
+      REPO_NAME: github-action        # 🔹 change this to your Artifact Registry repo name
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,8 +30,22 @@ jobs:
           install_components: 'beta'
 
       # 3. Verify gcloud
-      - name: verify gcloud
+      - name: Verify gcloud
         run: gcloud info
 
+      # 4. Configure Docker to use gcloud as a credential helper
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+      # 5. Build Docker Image
       - name: Build Docker Image
-        run: docker build -t $IMAGE_NAME:latest .
+        run: |
+          docker build -t $IMAGE_NAME:latest .
+
+      # 6. Tag & Push to Artifact Registry
+      - name: Push to Artifact Registry
+        run: |
+          IMAGE_URI=$REGION-docker.pkg.dev/${{ vars.PROJECT_ID }}/$REPO_NAME/$IMAGE_NAME:latest
+          echo "Pushing image to $IMAGE_URI"
+          docker tag $IMAGE_NAME:latest $IMAGE_URI
+          docker push $IMAGE_URI
